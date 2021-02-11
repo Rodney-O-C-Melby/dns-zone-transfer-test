@@ -81,16 +81,16 @@ def get_target_subdomains_from_auth_ns(target, auth_ns):
                 subdomain = str(n) + "." + target
                 subdomains.append(subdomain)
                 # print(subdomain)
-        print(target, "is NOT Secure against DNS Zone Transfers!!!")
+        print(target, "is VULNERABLE to DNS Zone Transfers!!!")
         return subdomains
     except TransferError:  # most domains
-        print(target, "is Secure against DNS Zone Transfers :-)")
+        print(target, "is SECURE against DNS Zone Transfers :-)")
         exit(1)
     except FormError:  # google.co.uk
-        print(target, "is Secure against DNS Zone Transfers :-)")
+        print(target, "is SECURE against DNS Zone Transfers :-)")
         exit(1)
     except TimeoutError:  # rhul.ac.uk
-        print(target, "is VERY Secure against DNS Zone Transfers :-)")
+        print(target, "is VERY SECURE against DNS Zone Transfers :-)")
         exit(1)
     except OSError:  # the next router
         print("[No route to host] Lookup Failure!")
@@ -136,12 +136,12 @@ def ztt_file(filepath, nameserver="1.1.1.1"):
     if "1.1.1.1" in nameserver:  # no given nameserver, use local
         with open(filepath) as fh:
             for line in fh.read().splitlines():
-                print("Trying ", line)
+                print("Trying domain", line)
                 ztt(line)
     else:  # use user given nameserver
         with open(filepath) as fh:
             for line in fh.read().splitlines():
-                print("Trying ", line)
+                print("Trying domain", line)
                 ztt(line, nameserver)
 
 
