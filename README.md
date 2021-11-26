@@ -1,13 +1,18 @@
 # Zone Transfer Tester
 Domain DNS zone transfer tester.
 
+# Requirements
+```
+python 3.9
+pip 20.3.4
+```
+
 # Get Zone Transfer Tester
 Download the repository change to the relevant directory, install the PIP requirements and give the file execute permissions
 ```
 git clone https://github.com/Rodney-O-C-Melby/zone-transfer-tester.git  
 cd zone-transfer-tester
 sudo pip install -r requirements
-sudo chmod +x ztt.py
 ```  
   
 # Use Zone Transfer Tester  
