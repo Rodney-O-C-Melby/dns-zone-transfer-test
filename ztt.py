@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+# REQUIREMENTS: dnspython
 """
     Zone Transfer Tester - Tests if zone transfers are possible for a given domain name.
 
@@ -23,26 +23,29 @@
 """
 
 # Imports
-from argparse import ArgumentParser
 from re import match
 from os import geteuid
 from sys import exit
 from sys import argv
+from dns import resolver
 from dns.query import xfr
 from dns.zone import from_xfr
 from dns.query import TransferError
 from dns.exception import FormError
-from scapy.layers.dns import DNS, DNSQR, DNSRR
-from scapy.layers.inet import IP, UDP
-from scapy.sendrecv import sr1
+from argparse import ArgumentParser
+from socket import gethostbyaddr, gethostbyname, herror
 
 __author__ = "Rodney Olav Christopher Melby"
-__copyright__ = "Copyright 2021, pearcom.co.uk"
+__copyright__ = "Copyright 2022, Rodney Olav Christopher Melby"
 __credits__ = ["Rodney Olav Christopher Melby"]
 __license__ = "LGPL v3"
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __maintainer__ = "Rodney Olav Christopher Melby"
 __status__ = "Production"
+
+GREEN = '\033[92m'
+RED = '\033[91m'
+END = '\033[0m'
 
 
 def get_local_name_server():
@@ -57,22 +60,61 @@ def get_local_name_server():
     return nameserver
 
 
+def ipv4(s):
+    return str(int(s)) == s and 0 <= int(s) <= 255
+
+
+def ipv6(s):
+    if len(s) > 4:
+        return False
+    return int(s, 16) >= 0 and s[0] != '-'
+
+
+def valid_ip(address):
+    """ Validates an IP address, return true or false. """
+    try:
+        if address.count(".") == 3 and all(ipv4(i) for i in address.split(".")):
+            return True
+        if address.count(":") == 7 and all(ipv6(i) for i in address.split(":")):
+            return True
+        return False
+    except ValueError:
+        return False
+
+
 def get_target_nameservers(target, ns="1.1.1.1"):
-    """ Returns a domain names name servers """
-    dns_req = IP(dst=ns)/UDP(dport=53)/DNS(rd=1, qd=DNSQR(qname=target, qtype="NS", qclass="IN"))
-    answer = sr1(dns_req, verbose=0)  # scapy python library
-    # dns_req.show()  # debugging
-    # answer.show()
+    """ Returns a domain names name servers IP. """
     servers = []
-    for x in range(answer[DNS].ancount):
-        servers.append(answer[DNSRR][x].rdata.decode("utf-8"))
+    if valid_ip(target):  # handle IPs
+        servers.append(target)
+    else:  # handle domain names
+        my_resolver = resolver.Resolver()
+        my_resolver.nameservers = [ns]
+        try:
+            nameservers = my_resolver.resolve(target, 'NS')  # NS lookup
+            for server in nameservers:
+                # print(server)
+                ip = gethostbyname(str(server))  # get NS ip
+                servers.append(ip)
+        except resolver.NoNameservers:
+            print(RED + "No DNS servers at " + target + END)
+            exit(-1)
+        except resolver.NXDOMAIN:
+            print(RED + "The DNS query name does not exist: " + target + END)
+            exit(-1)
     return servers
 
 
 def get_target_subdomains_from_auth_ns(target, auth_ns):
     """ Checks domains nameserver for zone transfers, if allowed returns a list of enumerated subdomain DNS records"""
+    if valid_ip(target):  # handle IPs
+        try:
+            gethostbyaddr(str(target))
+        except herror:
+            print(RED + "Could not get hostname from " + str(target) + ", check target is live/up." + END)
+            exit(-1)
     try:
-        z = from_xfr(xfr(auth_ns, target))  # zone transfer dig request using auth ns
+        z = from_xfr(xfr(str(auth_ns), target))  # zone transfer dig request using auth ns
         subdomains = []
         names = z.nodes.keys()  # node key values
         for n in names:
@@ -81,102 +123,115 @@ def get_target_subdomains_from_auth_ns(target, auth_ns):
                 subdomain = str(n) + "." + target
                 subdomains.append(subdomain)
                 # print(subdomain)
-        print(target, "is VULNERABLE to DNS Zone Transfers!!!")
+        print(RED + target, "is VULNERABLE to DNS Zone Transfers!!!" + END)
         return subdomains
     except TransferError:  # most domains
-        print(target, "is SECURE against DNS Zone Transfers :-)")
+        print(GREEN + target, "is SECURE against DNS Zone Transfers :-)" + END)
         exit(1)
     except FormError:  # google.co.uk
-        print(target, "is SECURE against DNS Zone Transfers :-)")
+        print(GREEN + target, "is SECURE against DNS Zone Transfers :-)" + END)
         exit(1)
     except TimeoutError:  # rhul.ac.uk
-        print(target, "is VERY SECURE against DNS Zone Transfers :-)")
+        print(GREEN + target, "is VERY SECURE against DNS Zone Transfers :-)" + END)
         exit(1)
     except OSError:  # the next router
-        print("[No route to host] Lookup Failure!")
+        print(RED + "[No route to host] Lookup Failure!" + END)
         print("Domain name reverse fqdn lookup error - Check your on the domains internal network, or setup dnscrypt "
               "for the domain as all european ISPs high-jack all dns traffic to censor the internet!")
-        exit(2)
+        exit(1)
 
 
-def ztt(domain, nameserver="1.1.1.1"):
+def ztt(domain, nameserver=""):
     """ Zone Transfer Test for a Given Domain Name and/or nameserver """
     # handle if user domain set
-    if "1.1.1.1" in nameserver:
+    if nameserver == "":
         nameserver = get_local_name_server()  # get local nameservers
-    else:
-        print("Using given nameserver ", nameserver)  # use user given nameserver
-    # get target nameservers
-    target_nameserver = get_target_nameservers(domain, nameserver)
+    target_nameserver = get_target_nameservers(domain, nameserver)  # get target nameservers
 
-    # # For Users and Debugging
-    # print("Using Nameserver: \t", local_nameserver)
-    # print("Target Domain Name: \t", domain)
-    # print("Target Nameserver 1: \t", target_nameserver[0])
-    # print("Target Nameserver 2: \t", target_nameserver[1], "\n")
+    # For Users and Debugging
+    print("DNS Server: \t", nameserver)
+    print("Target: \t", domain)
+    count = 1
+    for server in target_nameserver:
+        print("Target DNS " + str(count) + ": \t", server)
+        count += 1
 
     # test if nameserver lookup was ok
     try:
-        # attempt zone transfer to enumerate all subdomains
-        subdomains = get_target_subdomains_from_auth_ns(domain, target_nameserver[0])
+        subdomains = []
+        for server in target_nameserver:
+            # attempt zone transfer to enumerate all subdomains
+            subdomains = get_target_subdomains_from_auth_ns(domain, server)
+            if len(subdomains) > 0:
+                print(GREEN + "Found", len(subdomains), "subdomains at", domain, "from nameserver", server + END)
+                # print(subdomains)
+
         if len(subdomains) > 0:
-            print("Found", len(subdomains), "subdomains at", domain)
-            return True
+            exit(1)
         else:  # no subdomains found
-            print("No subdomains found at", domain)
-            return False
+            print(RED + "No subdomains found at", domain + END)
+            exit(1)
     except IndexError:
-        print("Domain NS lookup failed. Check domain name is correct and network connection is active!")
-        exit(3)
+        print(RED + "Domain NS lookup failed. Check domain name is correct and network connection is active!" + END)
+        exit(1)
 
 
-def ztt_file(filepath, nameserver="1.1.1.1"):
+def ztt_file(filepath, nameserver=""):
     """ Reads a file of domains and uses ztt to check each domain and/or with optionally given nameserver """
-    # handle if user domain set
-    if "1.1.1.1" in nameserver:  # no given nameserver, use local
-        with open(filepath) as fh:
-            for line in fh.read().splitlines():
-                print("Trying domain", line)
-                ztt(line)
-    else:  # use user given nameserver
-        with open(filepath) as fh:
-            for line in fh.read().splitlines():
-                print("Trying domain", line)
-                ztt(line, nameserver)
+    # handle if nameserver set
+    if nameserver == "":
+        nameserver = get_local_name_server()  # get local nameservers
+    with open(filepath) as fh:
+        for target in fh.read().splitlines():
+            ztt(target, nameserver)
 
 
 def main():
     """ Main program - handle user input, usage etc """
-
     # handle optional positional arguments
     if not geteuid() == 0:  # check root permissions
-        exit("\nOnly root can run this script. Try using sudo!\n")
-    if len(argv) < 2:  # accept no arguments
-        ztt("zonetransfer.me")
-    if len(argv) == 2:  # accept one positional argument
-        domain = argv[1]  # get domain
-        ztt(domain)
+        print(RED + "Only root can run this script. Try using sudo!" + END)
+        exit(1)
     if len(argv) > 5:
         print("Too many arguments. One domain name only!")
-        exit(4)
+        exit(1)
 
     # handle help and usage
-    parser = ArgumentParser(description="Zone Transfer Tester ztt tests domain zone transfers to enumerate subdomains.")
-    parser.add_argument("-d", "--domain", action="store", help="The target domain name")
-    parser.add_argument("-f", "--file", action="store", help="input file of domain names, one per line.")
-    parser.add_argument("-n", "--nameserver", action="store", help="Nameserver IP to use for target NS query.")
+    parser = ArgumentParser(description="Zone Transfer Tester: ztt tests IP's or domains for zone transfers. (XFR)")
+    parser.add_argument('target', action="store", nargs="?", help="Target IP or Domain name to test")
+    parser.add_argument('-f', "--file", action='store', dest="file", default=False,
+                        help='file of domain names to test, one per line')
+    parser.add_argument('-n', "--nameserver", action='store', dest="nameserver", default=False,
+                        help='DNS IP for target DNS query, defaults to local DNS')
     args = parser.parse_args()
 
+    target, filename, nameserver = "", "", ""
+    bad_chars = [';', ':', '!', "*", '"', "'", '#', '$', '|', '%', '^', '&', '*', '(', ')', '<', '>', ',', '/', '?',
+                 '\\', '[', ']', '{', '}', '-', '_', '+', '=']  # illegal chars (special except dot)
+    # strip bad characters from user input
+    if args.target:
+        target = str(args.target)
+        for i in bad_chars:
+            target = target.replace(i, '')
+    if args.file:
+        filename = str(args.file)
+        for i in bad_chars:
+            filename = filename.replace(i, '')
+    if args.nameserver:
+        nameserver = str(args.nameserver)
+        for i in bad_chars:
+            nameserver = nameserver.replace(i, '')
     # handle optional arguments
-    if args.domain and args.nameserver:
-        # print(args.domain)
-        ztt(args.domain, args.nameserver)
+    if args.target and args.nameserver:
+        ztt(target, nameserver)
     if args.file and args.nameserver:
-        ztt_file(args.file, args.nameserver)
-    if args.domain and not args.nameserver:
-        ztt(args.domain)
+        ztt_file(filename, nameserver)
+    if args.target and not args.nameserver:
+        ztt(target)
     if args.file and not args.nameserver:
-        ztt_file(args.file)
+        ztt_file(filename)
+    if args.nameserver and not args.file and not args.target:
+        ztt("zonetransfer.me", nameserver)
 
 
 if __name__ == '__main__':
