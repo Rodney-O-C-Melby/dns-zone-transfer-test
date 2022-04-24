@@ -1,36 +1,64 @@
-# Zone Transfer Tester
-Domain DNS zone transfer tester.
+# DNS Zone Transfer Test
+Automates Domain Name System (DNS) zone transfer testing. 
+
+Automatically finds a given domains nameservers, and 
+tests for zone transfers, if successfully, identified A records are printed to standard output.
 
 # Requirements
 ```
-python 3.9
-pip 20.3.4
+python >= 3.9
+pip >= 20.3.4
 ```
 
-# Get Zone Transfer Tester
-Download the repository change to the relevant directory, install the PIP requirements and give the file execute permissions
+# Installation
+Download the repository change to the relevant directory, and install the PIP package.
 ```
 git clone https://github.com/Rodney-O-C-Melby/zone-transfer-tester.git  
-cd zone-transfer-tester
-sudo pip install -r requirements
+cd dns-zone-transfer-test
+pip install .
 ```  
   
-# Use Zone Transfer Tester  
-sudo or root is required to make a new network connection, python indicates python v3.9 is used to interpret, and ztt.py is the program to interpret or run.  
+# Usage  
+sudo/root is required, or SETCAP permissions for the user to make a new network connection is required. 
+Also, python greater than or equal to version 3.9 is required and python sitepackages should be included in 
+the PATH environment variable.  
 ```
-sudo python ztt.py  
-sudo python ztt.py zonetransfer.me
-sudo python ztt.py -f domains.txt  
-sudo python ztt.py -n 8.8.8.8 zonetransfer.me  
-sudo python ztt.py -f domains.txt -n 8.8.8.8
+usage: dztt [-h] [-f FILE] [-n NAMESERVER] [target]
+
+DNS Zone Transfer Test: dztt tests IP's or domains for zone transfers. (XFR)
+
+positional arguments:
+  target                Target IP or Domain name to test
+
+options:
+  -h, --help            show this help message and exit
+  -f FILE, --file FILE  file of domain names to test, one per line
+  -n NAMESERVER, --nameserver NAMESERVER
+                        DNS IP for target DNS query, defaults to local DNS
+
+### EXAMPLES ###
+dztt  
+sudo dztt zonetransfer.me
+sudo dztt -f domains.txt  
+sudo dztt -n 8.8.8.8 zonetransfer.me  
+sudo dztt -f domains.txt -n 8.8.8.8
 ```  
-# Zone Transfer Tester Responses  
-A domain that is vulnerable to zone transfers
+# Output
+A domain that is vulnerable to zone transfers will print the following message to standard out, and print each 
+identified A record.
 ``` 
 zonetransfer.me is VULNERABLE to DNS Zone Transfers!!!  
 Found 34 subdomains at zonetransfer.me  
 ``` 
-A domain that is not vulnerable to zone transfers
+A domain that is not vulnerable to zone transfers will print the following message to standard out.
 ``` 
-google.co.uk is SECURE against DNS Zone Transfers :-)  
+nmap.org is SECURE against DNS Zone Transfers :-)  
+```
+
+# Input
+Accepts a file containing domain names to test, one per line.
+
+# PIP Requirements
+```
+dnspython >= 2.2.1
 ```
