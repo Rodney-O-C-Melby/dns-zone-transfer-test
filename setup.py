@@ -38,6 +38,6 @@ setuptools.setup(
     ],
     package_dir={"": "src"},
     packages=setuptools.find_packages(where="src/dns-zone-transfer-test"),
-    python_requires=">=3.10",
+    python_requires=">=3.8",
     scripts=["src/dns-zone-transfer-test/dztt"]
 )
