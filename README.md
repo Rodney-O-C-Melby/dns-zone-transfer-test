@@ -2,7 +2,7 @@
 Automates Domain Name System (DNS) zone transfer testing. 
 
 Automatically finds a given domains nameservers, and 
-tests for zone transfers, if successfully, identified A records are printed to standard output.
+tests for zone transfers, if successfully, subdomains are printed to standard output.
 
 # Requirements
 ```
