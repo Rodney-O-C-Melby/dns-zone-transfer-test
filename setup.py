@@ -32,7 +32,7 @@ setuptools.setup(
         # "Framework :: Setuptools Plugin",
         # "Operating System :: OS Independent",
         "Operating System :: POSIX :: Linux",
-        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.8",
         "Topic :: Software Development :: Testing",
         "Natural Language :: English",
     ],
