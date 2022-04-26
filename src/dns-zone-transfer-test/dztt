@@ -16,41 +16,83 @@
 
 # Imports
 from re import match
-from os import geteuid
+#from os import geteuid
 from sys import exit
 from sys import argv
 from dns import resolver
 from dns.query import xfr
+from platform import system
 from dns.zone import from_xfr
 from dns.query import TransferError
 from dns.exception import FormError
 from argparse import ArgumentParser
+from subprocess import check_output
 from socket import gethostbyaddr, gethostbyname, herror
 
 __author__ = "Rodney O C Melby"
 __copyright__ = "Copyright 2022, Rodney O C Melby"
 __credits__ = ["Bob Halley"]
 __license__ = "LGPL v2.1"
-__version__ = "1.0.0"
-__maintainer__ = "Rodney Olav Christopher Melby"
+__version__ = "1.0.1"
+__maintainer__ = "Rodney O C Melby"
 __status__ = "Production"
 
-# Constants
-GREEN = '\033[92m'
-RED = '\033[91m'
-END = '\033[0m'
+
+def colour_string(string, colour):
+    """print coloured output on terminal for linux via ansi escape sequences or windows no color."""
+    coloured_string = ""
+    if system() == "Linux":
+        if colour == "GREEN":
+            coloured_string = '\033[92m' + string + '\033[0m'
+            print(coloured_string)
+        if colour == "RED":
+            coloured_string = '\033[91m' + string + '\033[0m'
+            print(coloured_string)
+    elif system() == "Windows":
+        if colour == "GREEN":
+            print(string)
+        if colour == "RED":
+            print(string)
 
 
 def get_local_name_server():
-    """ Returns the local machines nameserver IP or googles dns """
-    nameserver = "1.1.1.1"
-    with open("/etc/resolv.conf") as fh:
-        for line in fh.readlines():
-            groups = match("nameserver (.*)", line)
-            if groups:
-                nameserver = groups.groups()[0]
+    """ gets local dns for linux or windows, untested on mac os. """
+    if system() == "Windows":
+        output = check_output(["ipconfig", "-all"])
+        ipconfig_all_list = output.decode('utf-8').split('\n')
+
+        dns_ips = []
+        for i in range(0, len(ipconfig_all_list)):
+            if "DNS Servers" in ipconfig_all_list[i]:
+                # get the first dns server ip
+                first_ip = ipconfig_all_list[i].split(":")[1].strip()
+                print(first_ip)
+                if not valid_ip(first_ip):
+                    # invalid ip
+                    print("Invalid Local DNS IP! change your DNS or use google with the flag -n 8.8.8.8.")
+                    exit(6)
+                dns_ips.append(first_ip)
+                # get all other dns server ips if they exist
+                k = i+1
+                while k < len(ipconfig_all_list) and ":" not in ipconfig_all_list[k]:
+                    ip = ipconfig_all_list[k].strip()
+                    if valid_ip(ip):
+                        dns_ips.append(ip)
+                    k += 1
+                # at this point we're done
                 break
-    return nameserver
+        nameserver = dns_ips[0]
+        return nameserver
+    elif system() == "Linux" or system() == "Darwin":
+        """ Returns the local machines nameserver IP or googles dns (LINUX/UNIX) """
+        nameserver = "1.1.1.1"
+        with open("/etc/resolv.conf") as fh:
+            for line in fh.readlines():
+                groups = match("nameserver (.*)", line)
+                if groups:
+                    nameserver = groups.groups()[0]
+                    break
+        return nameserver
 
 
 def ipv4(s):
@@ -91,14 +133,13 @@ def get_target_nameservers(target, ns="1.1.1.1"):
                 server_ips.append(ip)
                 servers.append(str(server))
         except resolver.NoNameservers:
-            print(RED + "No DNS servers found at " + target + END)
+            colour_string("No DNS servers found at " + target, "RED")
             exit(-1)
         except resolver.NXDOMAIN:
-            print(RED + "The DNS query name does not exist: unknown domain" + target + END)
+            colour_string("The DNS query name does not exist: unknown domain " + target, "RED")
             exit(-1)
         except resolver.NoAnswer:
-            print(RED + "Cannot locate Nameservers from DNS lookup of A records at " + target + ", Try domain only "
-                                                                                                "not subdomains." + END)
+            colour_string("Cannot locate Nameservers from DNS lookup of A records at " + target + ", Try domain only not subdomains.", "RED")
             exit(-1)
     return server_ips, servers
 
@@ -109,7 +150,7 @@ def get_target_subdomains_from_auth_ns(target, auth_ns):
         try:
             gethostbyaddr(str(target))
         except herror:
-            print(RED + "Could not get hostname from " + str(target) + ", check target is live/up." + END)
+            colour_string("Could not get hostname from " + str(target) + ", check target is live/up.", "RED")
             exit(-1)
     try:
         z = from_xfr(xfr(str(auth_ns), target))  # zone transfer dig request using authorized nameservers
@@ -121,21 +162,21 @@ def get_target_subdomains_from_auth_ns(target, auth_ns):
                 subdomain = str(n) + "." + target
                 subdomains.append(subdomain)
                 # print(subdomain)
-        print(RED + target, "is VULNERABLE to DNS Zone Transfers!!!" + END)
+        colour_string(target + " is VULNERABLE to DNS Zone Transfers!!!", "RED")
         return subdomains
     except TransferError:  # most domains
-        print(GREEN + target, "is SECURE against DNS Zone Transfers :-)" + END)
+        colour_string(target + " is SECURE against DNS Zone Transfers :-)", "GREEN")
         exit(1)
     except FormError:  # google.co.uk
-        print(GREEN + target, "is SECURE against DNS Zone Transfers :-)" + END)
+        colour_string(target + " is SECURE against DNS Zone Transfers :-)", "GREEN")
         exit(1)
     except TimeoutError:  # rhul.ac.uk
-        print(GREEN + target, "is VERY SECURE against DNS Zone Transfers :-)" + END)
+        colour_string(target + " is VERY SECURE against DNS Zone Transfers :-)", "GREEN")
         exit(1)
     except OSError:  # the next router
-        print(RED + "[No route to host] Lookup Failure!" + END)
-        print("Domain name reverse fqdn lookup error - Check your on the domains internal network, or setup dnscrypt "
-              "for the domain as all european ISPs high-jack all dns traffic to censor the internet!")
+        colour_string("[No route to host] Lookup Failure!", "RED")
+        colour_string("Domain name reverse fqdn lookup error - Check your on the domains internal network, or setup dnscrypt " +
+              "for the domain as all european ISPs high-jack all dns traffic to censor the internet!", "RED")
         exit(1)
 
 
@@ -162,7 +203,7 @@ def ztt(domain, nameserver=""):
             # attempt zone transfer to enumerate all subdomains
             subdomains = get_target_subdomains_from_auth_ns(domain, server)
             if len(subdomains) > 0:
-                print(GREEN + "Found", len(subdomains), "subdomains at", domain, "from nameserver", server + END)
+                colour_string("Found " + str(len(subdomains)) + " subdomains at " + domain + " from nameserver " + server, "GREEN")
                 for host in subdomains:
                     print(host)
                 # print(subdomains)
@@ -170,11 +211,10 @@ def ztt(domain, nameserver=""):
         if len(subdomains) > 0:
             exit(1)
         else:  # no subdomains found
-            print(RED + "No subdomains found at " + domain + END)
+            colour_string("No subdomains found at " + domain, "RED")
             exit(1)
     except IndexError:
-        print(RED +
-              "Domain Name Server lookup failed. Check domain name is correct and network connection is active!"+END)
+        colour_string("Domain Name Server lookup failed. Check domain name is correct and network connection is active!", "RED")
         exit(1)
 
 
@@ -201,15 +241,15 @@ def parse_arguments():
     return arguments
 
 
-def require_root():
-    """ method to require root privillages. """
-    # handle optional positional arguments
-    if not geteuid() == 0:  # check root permissions
-        print(RED + "Only root can run this script. Try using sudo!" + END)
-        exit(1)
-    if len(argv) > 5:
-        print("Too many arguments. One domain name only!")
-        exit(1)
+#def require_root():
+#    """ method to require root privillages. """
+#    # handle optional positional arguments
+#    if not geteuid() == 0:  # check root permissions
+#        print(RED + "Only root can run this script. Try using sudo!" + END)
+#        exit(1)
+#    if len(argv) > 5:
+#        print("Too many arguments. One domain name only!")
+#        exit(1)
 
 
 def check_user_input(arguments):
