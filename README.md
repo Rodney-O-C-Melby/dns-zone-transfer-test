@@ -10,15 +10,30 @@ dztt zonetransfer.me
 dztt -f domains.txt
 dztt -n 1.1.1.1 zonetransfer.me
 ```
-
 # Requirements
 ```
 git >= 2.36.0
 python >= 3.9
 pip >= 20.3.4
 ```
-
-# Installation
+# Use without System Installation
+Ensure system packages in requirements are installed, Download the repository.
+```
+sudo pacman -Syu git python pip | sudo apt install git python pip
+git clone https://github.com/Rodney-O-C-Melby/zone-transfer-tester.git
+```
+Install pip dependancies, and run program.
+```
+pip install dnspython
+python dns-zone-transfer-test/src/dns-zone-transfer-test/dztt
+```
+Or create a virtual enviroment, install pip dependancies into virtual enviroment, run program from virtual enviroment.
+```
+python -m venv test
+test/bin/pip install dnspython
+test/bin/python dns-zone-transfer-test/src/dns-zone-transfer-test/dztt
+```
+# System Installation of dztt
 Download the repository change to the relevant directory, and install the PIP package.
 ```
 git clone https://github.com/Rodney-O-C-Melby/zone-transfer-tester.git  
